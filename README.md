@@ -6,6 +6,10 @@ prepared statements, streaming and typed queries, transactions, nested
 savepoints, cancellation, deadlines and deterministic resource closure.
 The pinned driver embeds SQLite 3.50.4 in the tested Linux amd64 build.
 
+The sibling [`ecosystem::sql`](../sql/README.md) module defines a backend-facing
+connection/query/transaction contract and adapts this SQLite implementation
+without changing its native driver.
+
 ## Native dependency setup
 
 The GoML manifest is independent:
