@@ -30,9 +30,9 @@ translate GoML dependencies into Go module dependencies.
 Fetch native modules explicitly before compiling:
 
 ```sh
-cd ecosystem/sqlite
+cd ~/git/gomlang/sqlite
 go mod download all
-../../stage2/bin/goml test
+../../goml-dev/stage2/bin/goml test
 ```
 
 `go.mod` and `go.sum` pin the driver and its dependencies, including the matching
@@ -40,7 +40,7 @@ go mod download all
 resolution with network access disabled. The database driver itself does not
 require CGo; the verification race detector does require a C compiler.
 See the [driver documentation](https://pkg.go.dev/modernc.org/sqlite) and
-[GoML FFI guide](../../docs/goml.md#go-ffi).
+[GoML FFI guide](../../goml-dev/docs/goml.md#go-ffi).
 
 ## Usage
 
@@ -221,7 +221,7 @@ SQLite 3.45.1 reference sequences, including prepared statements, transactions,
 savepoints, joins, aggregates, recursive queries, JSON and errors. The committed
 fixture records the independent engine's results; integers/blobs/text are exact
 and REAL values use a 1e-12 tolerance. No reference interpreter is needed at test
-time. See [fixture provenance](../consumers/sqlite/tests/data/README.md).
+time. See [fixture provenance](../../goml-dev/ecosystem/consumers/sqlite/tests/data/README.md).
 
 A database fixture produced by the independent engine is copied into `_artifact`
 for real file reads/writes, rollback-on-close and read-only reopening. A small C
@@ -241,7 +241,7 @@ comparison limit while keeping concrete state in the native adapter.
 GoML 0.1.50 keeps `std::io::Error` and `std::ffi::Error` distinct. The consumer
 uses standard I/O directly in its FFI-importing package; the former transport
 wrapper has been removed. The retained
-[regression reproducer](../repros/ffi_error_alias/README.md) checks this boundary.
+[regression reproducer](../../goml-dev/ecosystem/repros/ffi_error_alias/README.md) checks this boundary.
 
 The library does not provide a connection pool, ORM/migrations, asynchronous
 query objects, custom SQL function registration, backup or incremental BLOB APIs.
