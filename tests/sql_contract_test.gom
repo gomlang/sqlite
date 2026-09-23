@@ -1,0 +1,30 @@
+package tests;
+
+use ecosystem::sql::{Query, Params, Row, Executor, Connection, Transaction, TransactionMode};
+use ecosystem::sql::sqlite::{SqliteDriver};
+use std::testing;
+
+#[test]
+fn existing_sqlite_consumer_uses_generic_sql_contract() -> () {
+    let database = testing::expect_ok(SqliteDriver::new().memory(), "database");
+    defer {
+        let _ = database.close();
+    };
+    let create = testing::expect_ok(
+        Query::new("CREATE TABLE events(id INTEGER)", Params::empty()),
+        "create",
+    );
+    testing::assert_ok(database.execute(create));
+    let transaction = testing::expect_ok(database.begin(TransactionMode::Immediate), "transaction");
+    let insert = testing::expect_ok(
+        Query::new("INSERT INTO events VALUES(3)", Params::empty()),
+        "insert",
+    );
+    testing::assert_ok(transaction.execute(insert));
+    testing::assert_ok(transaction.commit());
+    let select = testing::expect_ok(Query::new("SELECT id FROM events", Params::empty()), "select");
+    let row: Row = testing::expect_ok(database.query_one(select), "row");
+    let id: i64 = testing::expect_ok(row.get(0), "id");
+    testing::assert_eq(id, 3);
+    testing::assert_ok(database.close());
+}

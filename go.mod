@@ -19,4 +19,4 @@ require (
 
 require example.com/goml-ecosystem/sqlite v0.0.0
 
-replace example.com/goml-ecosystem/sqlite => ../../sqlite
+replace example.com/goml-ecosystem/sqlite => ../../../../gomlang/sqlite
