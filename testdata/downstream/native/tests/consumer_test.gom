@@ -1,6 +1,6 @@
 package tests;
 
-use consumer::sqlite;
+use downstream::sqlite as sqlite;
 use std::testing;
 
 #[test]

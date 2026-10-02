@@ -1,7 +1,7 @@
 package tests;
 
 use ecosystem::verification::reference;
-use consumer::sqlite as app;
+use downstream::sqlite as app;
 use std::fs;
 use std::json;
 use std::testing;

@@ -1,5 +1,5 @@
 [module]
-path = "consumer::sqlite"
+path = "downstream::sqlite"
 
 [dependencies]
 "ecosystem::sqlite" = "0.1.0"

@@ -12,7 +12,7 @@ without changing its native driver.
 
 ## Native dependency setup
 
-The GoML manifest is independent:
+Applications declare the GoML dependency:
 
 ```toml
 [dependencies]
@@ -21,11 +21,11 @@ The GoML manifest is independent:
 
 The Go adapter is a separate Go dependency named
 `example.com/goml-ecosystem/sqlite`. It is local example infrastructure, not a
-published Go module. The independent consumer's `go.mod` uses a local `replace`
-to `../../sqlite`; its GoML dependency still resolves version `0.1.0` through the
-isolated registry. Applications need an equivalent Go module mapping for the
-adapter, plus its pinned transitive dependencies. GoML does not implicitly
-translate GoML dependencies into Go module dependencies.
+published Go module. The library manifest declares it in `[native]`, allowing
+the driver to select the adapter and its pinned transitive dependencies for
+applications with a minimal `go.mod`. The native downstream fixture retains
+a local `replace` to `../../..` from `testdata/downstream/native`;
+its GoML dependency resolves through the isolated verification registry.
 
 Fetch native modules explicitly before compiling:
 
@@ -101,7 +101,7 @@ rows. `value(index)` accesses a dynamic value; `get[T](index)` decodes it.
 may have an empty declared type. `values()` returns a new vector.
 
 Implement `FromRow` to map records. `Row.decode`, `Rows.next_as`,
-`query_one`, `query_optional` and `query_all` use it. The independent consumer
+`query_one`, `query_optional` and `query_all` use it. The native downstream fixture
 defines both a `UserId` value mapping and a `User` record mapping, with nullable
 fields, across the versioned module boundary.
 
@@ -216,12 +216,12 @@ recovers the original error for native `errors.Is`/`errors.As` consumers.
 (cd ../verification && just ecosystem-test sqlite)
 ```
 
-GoML library and consumer tests cover ordinary APIs and replay 243 independent
+GoML library and downstream tests cover ordinary APIs and replay 243 independent
 SQLite 3.45.1 reference sequences, including prepared statements, transactions,
 savepoints, joins, aggregates, recursive queries, JSON and errors. The committed
 fixture records the independent engine's results; integers/blobs/text are exact
 and REAL values use a 1e-12 tolerance. No reference interpreter is needed at test
-time. See [fixture provenance](consumer/tests/data/README.md).
+time. See [fixture provenance](testdata/downstream/native/tests/data/README.md).
 
 A database fixture produced by the independent engine is copied into `_artifact`
 for real file reads/writes, rollback-on-close and read-only reopening. A small C
@@ -238,7 +238,7 @@ External handle types use small named Go interfaces rather than exposing the
 large `database/sql` implementation graph. This avoids the current FFI type-graph
 comparison limit while keeping concrete state in the native adapter.
 
-GoML 0.1.50 keeps `std::io::Error` and `std::ffi::Error` distinct. The consumer
+GoML 0.1.50 keeps `std::io::Error` and `std::ffi::Error` distinct. The native downstream fixture
 uses standard I/O directly in its FFI-importing package; the former transport
 wrapper has been removed. The retained
 [regression reproducer](../../goml-dev/gomlc/testdata/module/project084_ffi_error_alias) checks this boundary.
@@ -248,3 +248,14 @@ query objects, custom SQL function registration, backup or incremental BLOB APIs
 Callers can execute SQLite queries, joins, recursive CTEs, window functions,
 JSON functions, ordinary PRAGMAs and triggers through the typed statement API.
 Changing SQLite journaling policies remains subject to SQLite's own guarantees.
+
+## Development and downstream checks
+
+Requires GoML 0.1.55 or newer. The independent native fixture is in `testdata/downstream/native/`; it retains a separate manifest and Go module for native dependencies. Root development dependencies cover its SQL and verification helpers. From the library root, run:
+
+```sh
+goml test
+goml verify --timeout 300s
+```
+
+`goml verify` builds and tests the fixture against an isolated registry snapshot. `(cd ../verification && just ecosystem-test sqlite)` also runs the library-specific smoke and compatibility checks.
