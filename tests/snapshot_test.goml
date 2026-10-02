@@ -1,0 +1,86 @@
+package tests;
+
+use ecosystem::sqlite::{Database, Executor, Params, Value, Row, FromValue, ToValue};
+use std::bytes::{Bytes};
+use std::testing;
+
+fn snapshot_bytes(value: Value) -> Bytes {
+    match value {
+        Value::Blob(bytes) | Value::TextBytes(bytes) => bytes,
+        _ => {
+            testing::assert(false);
+            Bytes::new()
+        },
+    }
+}
+
+#[test]
+fn parameter_constructors_snapshot_binary_values_before_execution() -> () {
+    let database = testing::expect_ok(Database::memory(), "database");
+    defer {
+        let _ = database.close();
+    };
+    for named in Vec::from_array([false, true]) {
+        let blob = Bytes::from_vec(Vec::from_array([0, 255]));
+        let text = Bytes::from_vec(Vec::from_array([128, 254]));
+        let params = if named {
+            Params::named(
+                Vec::from_array([("blob", Value::Blob(blob)), ("text", Value::TextBytes(text))]),
+            )
+        } else {
+            Params::positional(Vec::from_array([Value::Blob(blob), Value::TextBytes(text)]))
+        };
+        blob.set(0, 9);
+        text.set(0, 10);
+        let query = if named {
+            "SELECT :blob, :text"
+        } else {
+            "SELECT ?, ?"
+        };
+        let row: Row = testing::expect_ok(database.query_one(query, params), "snapshotted binding");
+        testing::assert_eq(snapshot_bytes(testing::expect_ok(row.value(0), "blob")).get(0), 0);
+        testing::assert_eq(snapshot_bytes(testing::expect_ok(row.value(1), "text")).get(0), 128);
+    }
+}
+
+#[test]
+fn retrieved_binary_values_cannot_mutate_saved_row_snapshots() -> () {
+    let database = testing::expect_ok(Database::memory(), "database");
+    defer {
+        let _ = database.close();
+    };
+    let row: Row = testing::expect_ok(
+        database.query_one("SELECT X'00FF' AS blob, CAST(X'80FE' AS TEXT) AS text", Params::empty()),
+        "binary row",
+    );
+    for index in 0..2 {
+        snapshot_bytes(testing::expect_ok(row.value(index), "value")).set(0, 1);
+        snapshot_bytes(row.values()[index]).set(0, 2);
+        let dynamic: Value = testing::expect_ok(row.get(index), "typed dynamic value");
+        snapshot_bytes(dynamic).set(0, 3);
+        let expected = if index == 0 {
+            0
+        } else {
+            128
+        };
+        testing::assert_eq(
+            snapshot_bytes(testing::expect_ok(row.value(index), "saved value")).get(0),
+            expected,
+        );
+    }
+    let blob: Bytes = testing::expect_ok(row.get_named("blob"), "typed blob");
+    blob.set(0, 4);
+    let unchanged: Bytes = testing::expect_ok(row.get_named("blob"), "saved typed blob");
+    testing::assert_eq(unchanged.get(0), 0);
+}
+
+#[test]
+fn bytes_conversions_snapshot_input_and_output() -> () {
+    let bytes = Bytes::from_vec(Vec::from_array([7, 8]));
+    let value = bytes.to_value();
+    bytes.set(0, 9);
+    let copied: Bytes = testing::expect_ok(FromValue::from_value(value), "decode bytes");
+    testing::assert_eq(copied.get(0), 7);
+    copied.set(0, 10);
+    testing::assert_eq(snapshot_bytes(value).get(0), 7);
+}

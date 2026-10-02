@@ -1,0 +1,25 @@
+package tests;
+
+use ecosystem::sqlite::{Database, Executor, Params, Value, Row};
+use std::bytes::{Bytes};
+use std::testing;
+
+#[test]
+fn published_binary_parameters_and_rows_are_independent_snapshots() -> () {
+    let database = testing::expect_ok(Database::memory(), "database");
+    defer {
+        let _ = database.close();
+    };
+    let input = Bytes::from_vec(Vec::from_array([0, 255]));
+    let params = Params::named(Vec::from_array([("payload", Value::Blob(input))]));
+    input.set(0, 12);
+    let row: Row = testing::expect_ok(
+        database.query_one("SELECT :payload AS payload", params),
+        "bound row",
+    );
+    let decoded: Bytes = testing::expect_ok(row.get_named("payload"), "first decoding");
+    testing::assert_eq(decoded.get(0), 0);
+    decoded.set(0, 34);
+    let repeated: Bytes = testing::expect_ok(row.get_named("payload"), "saved decoding");
+    testing::assert_eq(repeated.get(0), 0);
+}
