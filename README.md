@@ -76,7 +76,10 @@ A DSN is configuration, not a bound SQL parameter.
 `TextBytes(Bytes)` and `Blob(Bytes)`. `TextBytes` preserves SQLite TEXT containing
 invalid UTF-8 without silently changing its storage class. BLOB and text data
 may contain NUL bytes. Empty blobs remain BLOBs, distinct from NULL. Native
-binding and returned blobs use copies.
+binding and returned blobs use copies. Parameter constructors snapshot BLOB and
+non-UTF-8 TEXT bytes immediately, so later mutations of the input cannot change a
+prepared binding. Row accessors and the standard `Bytes` conversions also copy
+binary storage; mutating a retrieved value cannot change a saved row.
 
 `ToValue` and `FromValue` support `Value`, `i64`, `f64`, `bool`, `string`, `Bytes`
 and generic `Option[T]`. Boolean decoding accepts only INTEGER zero/one; `None`

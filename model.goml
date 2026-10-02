@@ -140,6 +140,22 @@ fn decode(value: NativeValue) -> Result[Value, DbError] {
     }
 }
 
+fn copy_value(value: Value) -> Value {
+    match value {
+        Value::TextBytes(data) => Value::TextBytes(data.copy()),
+        Value::Blob(data) => Value::Blob(data.copy()),
+        _ => value,
+    }
+}
+
+fn copy_values(values: Vec[Value]) -> Vec[Value] {
+    let snapshot = Vec::with_capacity(values.len());
+    for value in values {
+        snapshot.push(copy_value(value));
+    }
+    snapshot
+}
+
 pub trait ToValue {
     fn to_value(self: Self) -> Value;
 }
@@ -229,14 +245,14 @@ impl FromValue for string {
 
 impl ToValue for Bytes {
     fn to_value(self: Bytes) -> Value {
-        Value::Blob(self)
+        Value::Blob(self.copy())
     }
 }
 
 impl FromValue for Bytes {
     fn from_value(value: Value) -> Result[Bytes, DbError] {
         match value {
-            Value::Blob(value) => Result::Ok(value),
+            Value::Blob(value) => Result::Ok(value.copy()),
             _ => Result::Err(DbError::new(ErrorKind::Conversion, "expected BLOB")),
         }
     }
@@ -273,7 +289,7 @@ impl Params {
     }
 
     pub fn positional(values: Vec[Value]) -> Params {
-        Params { values: values.copy(), names: Vec::new() }
+        Params { values: copy_values(values), names: Vec::new() }
     }
 
     pub fn named(values: Vec[(string, Value)]) -> Params {
@@ -281,7 +297,7 @@ impl Params {
         let items = Vec::new();
         for (name, value) in values {
             names.push(name);
-            items.push(value);
+            items.push(copy_value(value));
         }
         Params { values: items, names }
     }
@@ -324,14 +340,14 @@ impl Row {
     }
 
     pub fn values(self: Row) -> Vec[Value] {
-        self.values.copy()
+        copy_values(self.values)
     }
 
     pub fn value(self: Row, index: isize) -> Result[Value, DbError] {
         if index < 0 || index >= self.values.len() {
             Result::Err(DbError::new(ErrorKind::Argument, "column index out of range"))
         } else {
-            Result::Ok(self.values[index])
+            Result::Ok(copy_value(self.values[index]))
         }
     }
 
