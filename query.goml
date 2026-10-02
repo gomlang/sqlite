@@ -46,6 +46,15 @@ impl Statement {
         self.query(params)?.collect(max_rows)
     }
 
+    pub fn query_all_with_limits[T: FromRow](
+        self: Statement,
+        params: Params,
+        limits: CollectionLimits,
+    ) -> Result[Vec[T], DbError] {
+        limits.validate()?;
+        self.query(params)?.collect_with_limits(limits)
+    }
+
     pub fn query_one[T: FromRow](self: Statement, params: Params) -> Result[T, DbError] {
         self.query(params)?.one()
     }
@@ -99,6 +108,24 @@ impl Rows {
     }
 
     pub fn collect[T: FromRow](self: Rows, max_rows: isize) -> Result[Vec[T], DbError] {
+        self.collect_bounded(max_rows, Option::None)
+    }
+
+    pub fn collect_with_limits[T: FromRow](self: Rows, limits: CollectionLimits) -> Result[
+        Vec[T],
+        DbError,
+    ] {
+        if let Err(error) = limits.validate() {
+            let _ = self.close();
+            return Result::Err(error)
+        }
+        self.collect_bounded(limits.max_rows, Option::Some(limits.max_bytes))
+    }
+
+    fn collect_bounded[T: FromRow](self: Rows, max_rows: isize, max_bytes: Option[isize]) -> Result[
+        Vec[T],
+        DbError,
+    ] {
         defer {
             let _ = self.close();
         };
@@ -106,12 +133,16 @@ impl Rows {
             return Result::Err(DbError::new(ErrorKind::Argument, "negative result row limit"))
         }
         let values = Vec::new();
+        let mut remaining = max_bytes;
         loop {
             let Some(row) = self.next()? else {
                 break
             };
             if values.len() >= max_rows {
                 return Result::Err(DbError::new(ErrorKind::Limit, "query result exceeds row limit"))
+            }
+            if let Some(bytes) = remaining {
+                remaining = Option::Some(row.charge(bytes)?);
             }
             values.push(row.decode()?);
         }

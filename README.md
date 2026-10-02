@@ -141,10 +141,21 @@ BEGIN/COMMIT/END/ROLLBACK/SAVEPOINT/RELEASE are rejected so SQL cannot bypass
 managed transaction state. Run a sequence of statements inside `transaction`
 when it must be atomic. This wrapper does not expose a multi-statement script API.
 
-`Rows.collect` bounds retained row count, not bytes per value or total process
-memory. Streaming avoids retaining an entire result. A cursor owns its query
-context until EOF, failure or explicit close. Callers using `next` directly
-should use `defer` to close a partially consumed cursor.
+`Rows.collect_with_limits[T](CollectionLimits { max_rows, max_bytes })` bounds
+both retained row count and cumulative value payload. Both limits must be
+nonnegative. `Executor.query_all_with_limits[T](sql, params, limits)` and
+`Statement.query_all_with_limits[T](params, limits)` validate the limits before
+opening a cursor. An existing `Rows` is closed even when limits are invalid.
+Each row is charged before `FromRow`: NULL costs zero, INTEGER and REAL eight
+bytes each, and TEXT, non-UTF-8 TEXT and BLOB their byte lengths. Exact fits
+succeed; exceeding either cap returns `Limit` and closes the cursor, leaving
+prepared statements reusable. Zero byte budgets permit empty results and
+zero-byte values, subject to the row cap.
+
+The existing `Rows.collect` and `query_all` bound only row count. Payload budgets
+are not process memory caps: native row materialization, metadata, container
+overhead, snapshot copies and allocations in custom decoders are outside the
+budget. Use streaming `Rows.next`/`try_for_each` to avoid retaining large results.
 
 ## Transactions and resource lifecycle
 

@@ -1,0 +1,38 @@
+package sqlite;
+
+pub struct CollectionLimits {
+    pub max_rows: isize,
+    pub max_bytes: isize,
+}
+
+impl CollectionLimits {
+    fn validate(self: CollectionLimits) -> Result[(), DbError] {
+        if self.max_rows < 0 || self.max_bytes < 0 {
+            return Result::Err(
+                DbError::new(ErrorKind::Argument, "invalid result collection limits"),
+            )
+        }
+        Result::Ok(())
+    }
+}
+
+impl Row {
+    fn charge(self: Row, remaining: isize) -> Result[isize, DbError] {
+        let mut remaining = remaining;
+        for value in self.values {
+            let size = match value {
+                Value::Null => 0,
+                Value::Integer(_) | Value::Real(_) => 8,
+                Value::Text(value) => value.byte_len(),
+                Value::TextBytes(value) | Value::Blob(value) => value.len(),
+            };
+            if size > remaining {
+                return Result::Err(
+                    DbError::new(ErrorKind::Limit, "query result exceeds byte limit"),
+                )
+            }
+            remaining -= size;
+        }
+        Result::Ok(remaining)
+    }
+}

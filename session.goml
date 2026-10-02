@@ -85,6 +85,15 @@ pub trait Executor {
     ] {
         self.query(sql, params)?.collect(max_rows)
     }
+    fn query_all_with_limits[T: FromRow](
+        self: Self,
+        sql: string,
+        params: Params,
+        limits: CollectionLimits,
+    ) -> Result[Vec[T], DbError] {
+        limits.validate()?;
+        self.query(sql, params)?.collect_with_limits(limits)
+    }
     fn query_one[T: FromRow](self: Self, sql: string, params: Params) -> Result[T, DbError] {
         self.query(sql, params)?.one()
     }
