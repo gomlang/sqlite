@@ -1,0 +1,144 @@
+package tests;
+
+use ecosystem::sqlite::{CollectionLimits, Database, Executor, Params, Row, FromRow, DbError, ErrorKind, TransactionMode};
+use std::testing;
+use std::panic;
+
+#[test]
+fn native_collection_counts_storage_classes_before_decoding() -> () {
+    let database = memory();
+    defer {
+        let _ = database.close();
+    };
+    let query = "SELECT NULL, -9223372036854775808, 1.25, '中', CAST(x'ff00' AS TEXT), x'010203' UNION ALL SELECT NULL, 0, 0.0, '中', CAST(x'ff00' AS TEXT), x'010203'";
+    let exact: Vec[Row] = testing::expect_ok(
+        database.query_all_with_limits(
+            query,
+            Params::empty(),
+            CollectionLimits { max_rows: 2, max_bytes: 48 },
+        ),
+        "all storage classes",
+    );
+    testing::assert_eq(exact.len(), 2);
+    let short: Result[Vec[Row], DbError] = database.query_all_with_limits(
+        query,
+        Params::empty(),
+        CollectionLimits { max_rows: 2, max_bytes: 47 },
+    );
+    testing::assert_eq(testing::expect_err(short, "cumulative payload").kind, ErrorKind::Limit);
+    let limited: Result[Vec[Row], DbError] = database.query_all_with_limits(
+        query,
+        Params::empty(),
+        CollectionLimits { max_rows: 1, max_bytes: 9223372036854775807 },
+    );
+    testing::assert_eq(testing::expect_err(limited, "row cap").kind, ErrorKind::Limit);
+    testing::assert_eq(database.resources().cursors, 0);
+    let zero: Vec[Row] = testing::expect_ok(
+        database.query_all_with_limits(
+            "SELECT NULL, '', x''",
+            Params::empty(),
+            CollectionLimits { max_rows: 1, max_bytes: 0 },
+        ),
+        "zero payload",
+    );
+    testing::assert_eq(zero.len(), 1);
+    let empty: Vec[Row] = testing::expect_ok(
+        database.query_all_with_limits(
+            "SELECT 1 WHERE 0",
+            Params::empty(),
+            CollectionLimits { max_rows: 0, max_bytes: 0 },
+        ),
+        "empty result",
+    );
+    testing::assert(empty.is_empty());
+}
+
+struct BudgetPanicRow {}
+
+impl FromRow for BudgetPanicRow {
+    fn from_row(_row: Row) -> Result[BudgetPanicRow, DbError] {
+        panic::raise("budget decoder panic")
+    }
+}
+
+#[test]
+fn native_budget_closes_on_limit_invalid_limits_and_decoder_panic() -> () {
+    let database = memory();
+    defer {
+        let _ = database.close();
+    };
+    let statement = testing::expect_ok(database.prepare("SELECT zeroblob(4096)"), "prepare");
+    defer {
+        let _ = statement.close();
+    };
+    let limited: Result[Vec[BudgetPanicRow], DbError] = statement.query_all_with_limits(
+        Params::empty(),
+        CollectionLimits { max_rows: 1, max_bytes: 4095 },
+    );
+    testing::assert_eq(
+        testing::expect_err(limited, "limit precedes decoder").kind,
+        ErrorKind::Limit,
+    );
+    testing::assert_eq(database.resources().cursors, 0);
+    let caught = panic::catch(
+        || {
+            let result: Result[Vec[BudgetPanicRow], DbError] = statement.query_all_with_limits(
+                Params::empty(),
+                CollectionLimits { max_rows: 1, max_bytes: 4096 },
+            );
+            result
+        },
+    );
+    testing::assert(caught.is_err());
+    testing::assert_eq(database.resources().cursors, 0);
+    let rows = testing::expect_ok(statement.query(Params::empty()), "query again");
+    let invalid: Result[Vec[Row], DbError] = rows.collect_with_limits(
+        CollectionLimits { max_rows: -1, max_bytes: 0 },
+    );
+    testing::assert_eq(testing::expect_err(invalid, "close even invalid").kind, ErrorKind::Argument);
+    testing::assert_eq(database.resources().cursors, 0);
+    let exact: Vec[Row] = testing::expect_ok(
+        statement.query_all_with_limits(
+            Params::empty(),
+            CollectionLimits { max_rows: 1, max_bytes: 4096 },
+        ),
+        "statement reusable",
+    );
+    testing::assert_eq(exact.len(), 1);
+}
+
+#[test]
+fn native_budget_validates_before_writes_and_releases_transaction_cursor() -> () {
+    let database = memory();
+    defer {
+        let _ = database.close();
+    };
+    sql(database, "CREATE TABLE kept(n INTEGER)");
+    let invalid: Result[Vec[Row], DbError] = database.query_all_with_limits(
+        "INSERT INTO kept VALUES(1) RETURNING n",
+        Params::empty(),
+        CollectionLimits { max_rows: 1, max_bytes: -1 },
+    );
+    testing::assert_eq(
+        testing::expect_err(invalid, "before side effects").kind,
+        ErrorKind::Argument,
+    );
+    testing::assert_eq(integer(one(database, "SELECT count(*) FROM kept"), 0), 0);
+    let transaction = testing::expect_ok(database.begin(TransactionMode::Immediate), "begin");
+    let limited: Result[Vec[Row], DbError] = transaction.query_all_with_limits(
+        "SELECT zeroblob(4096)",
+        Params::empty(),
+        CollectionLimits { max_rows: 1, max_bytes: 1 },
+    );
+    testing::assert_eq(
+        testing::expect_err(limited, "transaction payload limit").kind,
+        ErrorKind::Limit,
+    );
+    testing::assert_eq(database.resources().cursors, 0);
+    let _ = testing::expect_ok(
+        transaction.execute("INSERT INTO kept VALUES(2)", Params::empty()),
+        "write after limit",
+    );
+    testing::assert_ok(transaction.commit());
+    testing::assert_eq(integer(one(database, "SELECT n FROM kept"), 0), 2);
+}

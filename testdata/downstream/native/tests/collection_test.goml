@@ -1,0 +1,54 @@
+package tests;
+
+use ecosystem::sqlite::{CollectionLimits, Database, Executor, Params, Row, DbError, ErrorKind};
+use std::testing;
+
+#[test]
+fn public_payload_collection_budget_reuses_prepared_native_cursor() -> () {
+    let database = testing::expect_ok(
+        Database::open("_artifact/payload-budget.sqlite"),
+        "file database",
+    );
+    defer {
+        let _ = database.close();
+    };
+    let _ = testing::expect_ok(
+        database.execute("CREATE TABLE IF NOT EXISTS payloads(v BLOB)", Params::empty()),
+        "create",
+    );
+    let _ = testing::expect_ok(database.execute("DELETE FROM payloads", Params::empty()), "clear");
+    let _ = testing::expect_ok(
+        database.execute("INSERT INTO payloads VALUES(zeroblob(8192))", Params::empty()),
+        "stored blob",
+    );
+    let statement = testing::expect_ok(database.prepare("SELECT v FROM payloads"), "prepare");
+    defer {
+        let _ = statement.close();
+    };
+    let rows = testing::expect_ok(statement.query(Params::empty()), "cursor");
+    let limited: Result[Vec[Row], DbError] = rows.collect_with_limits(
+        CollectionLimits { max_rows: 1, max_bytes: 8191 },
+    );
+    testing::assert_eq(
+        testing::expect_err(limited, "stored blob exceeds budget").kind,
+        ErrorKind::Limit,
+    );
+    testing::assert_eq(database.resources().cursors, 0);
+    let exact: Vec[Row] = testing::expect_ok(
+        statement.query_all_with_limits(
+            Params::empty(),
+            CollectionLimits { max_rows: 1, max_bytes: 8192 },
+        ),
+        "reused statement",
+    );
+    testing::assert_eq(exact.len(), 1);
+    let mixed: Vec[Row] = testing::expect_ok(
+        database.query_all_with_limits(
+            "SELECT '中', CAST(x'ff00' AS TEXT), 1, 1.0, NULL",
+            Params::empty(),
+            CollectionLimits { max_rows: 1, max_bytes: 21 },
+        ),
+        "published executor default",
+    );
+    testing::assert_eq(mixed.len(), 1);
+}
