@@ -251,7 +251,7 @@ Changing SQLite journaling policies remains subject to SQLite's own guarantees.
 
 ## Development and downstream checks
 
-Requires GoML 0.1.55 or newer. The independent native fixture is in `testdata/downstream/native/`; it retains a separate manifest and Go module for native dependencies. Root development dependencies cover its SQL and verification helpers. From the library root, run:
+Requires GoML 0.1.56 or newer. The independent native fixture is in `testdata/downstream/native/`; it retains a separate manifest and Go module for native dependencies. Root development dependencies cover its SQL and verification helpers. From the library root, run:
 
 ```sh
 goml test
