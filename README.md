@@ -220,7 +220,10 @@ entire subsequent lifetime.
 
 Waiting for the connection gate observes cancellation/deadlines. Query control
 remains effective during iteration; SQLite execution receives the operation
-context, and database close cancels the root context. Timeout is cooperative,
+context, and database close cancels the root context. Before advancing a live
+cursor, `Rows.next` checks its original control and closes the cursor on
+cancellation or timeout. An otherwise active prepared statement remains reusable. Already
+completed cursors retain repeated EOF behavior. Timeout is cooperative,
 including driver interruption and SQLite lock handling, rather than a hard
 real-time guarantee. Set SQLite's busy timeout deliberately when sharing a file
 with other writers. Rollback and close perform cleanup independently of an

@@ -692,6 +692,13 @@ func Next(cHandle Cursor) (bool, Row, error) {
 		d.recoverTransaction()
 		return false, Row{}, c.failure
 	}
+	// Propagation to the native context is asynchronous. Check the original
+	// control before each step so a cancelled cursor cannot keep returning rows.
+	if control, ok := c.control.(*ControlState); ok && control != nil {
+		if err := control.ctx.Err(); err != nil {
+			return fail(err)
+		}
+	}
 	if !c.rows.Next() {
 		if err := c.rows.Err(); err != nil {
 			return fail(err)

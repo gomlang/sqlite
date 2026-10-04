@@ -1,0 +1,45 @@
+package tests;
+
+use ecosystem::sqlite::{Database, Executor, Params, Control, ErrorKind, Row, TransactionMode};
+use std::testing;
+
+#[test]
+fn cancelled_cursor_releases_transaction_statement_for_reuse() -> () {
+    let database = testing::expect_ok(Database::memory(), "database");
+    defer {
+        let _ = database.close();
+    };
+    let transaction = testing::expect_ok(database.begin(TransactionMode::Deferred), "transaction");
+    let statement = testing::expect_ok(
+        transaction.prepare("SELECT 1 AS value UNION ALL SELECT 2"),
+        "statement",
+    );
+    let control = Control::unlimited();
+    let rows = testing::expect_ok(statement.query_with(Params::empty(), control), "cursor");
+    let saved = testing::expect_some(testing::expect_ok(rows.next(), "first row"), "row");
+    control.cancel();
+    testing::assert_eq(
+        testing::expect_err(rows.next(), "cancelled cursor").kind,
+        ErrorKind::Cancelled,
+    );
+    testing::assert_eq(database.resources().cursors, 0);
+    testing::assert_eq(database.resources().statements, 1);
+    testing::assert_eq(database.resources().transactions, 1);
+    testing::assert_ok(rows.close());
+    testing::assert_ok(rows.close());
+    let values: Vec[Row] = testing::expect_ok(
+        statement.query_all(Params::empty(), 2),
+        "reused statement",
+    );
+    testing::assert_eq(values.len(), 2);
+    let first: i64 = testing::expect_ok(values[0].get(0), "reused first value");
+    let second: i64 = testing::expect_ok(values[1].get(0), "reused second value");
+    let original: i64 = testing::expect_ok(saved.get(0), "saved first value");
+    testing::assert_eq(first, 1);
+    testing::assert_eq(second, 2);
+    testing::assert_eq(original, 1);
+    testing::assert_ok(transaction.commit());
+    testing::assert_eq(database.resources().statements, 0);
+    testing::assert_eq(database.resources().cursors, 0);
+    testing::assert_eq(database.resources().transactions, 0);
+}
