@@ -867,14 +867,27 @@ func Rollback(sHandle Session) error {
 		return ErrClosed
 	}
 	result := d.closeResources(s, true)
+	failed := func(err error) error {
+		// Keep the managed stack until recovery determines whether SQLite
+		// still has the transaction. In particular, releasing a savepoint
+		// after a failed ROLLBACK TO would retain its unrolled-back writes.
+		d.recoverTransaction()
+		return errors.Join(result, err)
+	}
 	if s.name == "" {
 		_, err := d.conn.ExecContext(context.Background(), "ROLLBACK")
-		result = errors.Join(result, ignoreInactive(err))
+		if err = ignoreInactive(err); err != nil {
+			return failed(err)
+		}
 	} else {
 		_, err := d.conn.ExecContext(context.Background(), "ROLLBACK TO SAVEPOINT "+s.name)
-		result = errors.Join(result, err)
+		if err != nil {
+			return failed(err)
+		}
 		_, err = d.conn.ExecContext(context.Background(), "RELEASE SAVEPOINT "+s.name)
-		result = errors.Join(result, err)
+		if err != nil {
+			return failed(err)
+		}
 	}
 	for _, item := range d.stack[index:] {
 		item.done = true

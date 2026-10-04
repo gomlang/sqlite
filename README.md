@@ -180,9 +180,15 @@ has ended that transaction, recovery invalidates its handles instead. Resources 
 transaction are closed before the commit attempt. A successful commit or
 rollback invalidates all handles belonging to the ended scope.
 
+If rollback fails while the native transaction remains active, its managed
+handles remain active so callers can retry rollback; the database and parent
+transaction stay blocked. A failed savepoint rollback never releases that
+savepoint's unrolled-back writes into its parent. Recovery invalidates handles
+when SQLite has already ended the transaction, preserving the original error.
+
 SQLite can automatically roll back a transaction after certain failures,
 including `INSERT OR ROLLBACK`. The adapter maintains private sentinel savepoints
-and checks them after execution and commit failures. If the sentinel was lost, it closes
+and checks them after execution, commit and rollback failures. If the sentinel was lost, it closes
 transaction resources and invalidates every transaction handle before allowing
 further operations. Ordinary statement-level constraint failures retain the
 transaction, allowing a nested savepoint to roll back and its parent to
