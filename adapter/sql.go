@@ -9,6 +9,11 @@ func tokens(text string) ([]string, error) {
 	result := make([]string, 0)
 	for i := 0; i < len(text); {
 		b := text[i]
+		// SQLite treats a UTF-8 BOM at a token boundary as whitespace.
+		if strings.HasPrefix(text[i:], "\ufeff") {
+			i += len("\ufeff")
+			continue
+		}
 		if b == ' ' || b == '\t' || b == '\r' || b == '\n' || b == '\f' {
 			i++
 			continue
@@ -57,12 +62,20 @@ func tokens(text string) ([]string, error) {
 			i++
 			for i < len(text) {
 				b = text[i]
-				if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b >= 128) {
+				if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '$' || b >= 128) {
 					break
 				}
 				i++
 			}
-			result = append(result, strings.ToUpper(text[start:i]))
+			// SQLite keywords fold ASCII only. Unicode uppercasing can turn
+			// ordinary identifiers such as caſe into control-flow keywords.
+			word := []byte(text[start:i])
+			for index, ch := range word {
+				if ch >= 'a' && ch <= 'z' {
+					word[index] = ch - ('a' - 'A')
+				}
+			}
+			result = append(result, string(word))
 			continue
 		}
 		result = append(result, string(b))
@@ -93,8 +106,8 @@ func singleStatement(text string) error {
 		}
 		trigger = position < len(values) && values[position] == "TRIGGER"
 	}
-	body, finished, cases := false, false, 0
-	for _, value := range values {
+	body, finished := false, false
+	for index, value := range values {
 		if finished {
 			if value != ";" {
 				return fmt.Errorf("%w: expected one SQL statement", ErrArgument)
@@ -105,18 +118,11 @@ func singleStatement(text string) error {
 			body = true
 			continue
 		}
-		if body {
-			if value == "CASE" {
-				cases++
-			}
-			if value == "END" {
-				if cases > 0 {
-					cases--
-				} else {
-					body = false
-					trigger = false
-				}
-			}
+		// A trigger ends with "; END", not every END token in its body.
+		// END can also terminate a CASE expression or name a column.
+		if body && value == "END" && index > 0 && values[index-1] == ";" {
+			body = false
+			trigger = false
 		}
 		if value == ";" && !body {
 			finished = true

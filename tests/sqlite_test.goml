@@ -645,3 +645,49 @@ fn transaction_sql_and_multiple_statements_cannot_bypass_managed_state() -> () {
     );
     testing::assert_eq(database.resources().transactions, 0);
 }
+
+#[test]
+fn bom_prefixed_transaction_sql_preserves_managed_rollback() -> () {
+    let database = memory();
+    defer {
+        let _ = database.close();
+    };
+    sql(database, "CREATE TABLE work(x)");
+    let transaction = testing::expect_ok(database.begin(TransactionMode::Deferred), "begin");
+    let _ = testing::expect_ok(
+        transaction.execute("INSERT INTO work VALUES(7)", Params::empty()),
+        "insert",
+    );
+    for input in Vec::from_array(["\uFEFFCOMMIT", " \uFEFF/* comment */\uFEFFROLLBACK"]) {
+        testing::assert_eq(
+            testing::expect_err(
+                transaction.execute(input, Params::empty()),
+                "managed SQL after BOM",
+            ).kind,
+            ErrorKind::Argument,
+        );
+    }
+    testing::assert_ok(transaction.rollback());
+    testing::assert_eq(integer(one(database, "SELECT count(*) FROM work"), 0), 0);
+}
+
+#[test]
+fn trigger_identifiers_cannot_hide_additional_statements() -> () {
+    let database = memory();
+    defer {
+        let _ = database.close();
+    };
+    sql(database, "CREATE TABLE input(case$value, caſe, end)");
+    sql(database, "CREATE TABLE audit(x)");
+    let trigger = "CREATE TRIGGER track AFTER INSERT ON input BEGIN INSERT INTO audit VALUES(NEW.case$value + NEW.caſe + NEW.end); END;";
+    testing::assert_eq(
+        testing::expect_err(
+            database.execute(trigger + " INSERT INTO audit VALUES(99)", Params::empty()),
+            "one statement",
+        ).kind,
+        ErrorKind::Argument,
+    );
+    sql(database, trigger);
+    sql(database, "INSERT INTO input VALUES(1, 2, 4)");
+    testing::assert_eq(integer(one(database, "SELECT x FROM audit"), 0), 7);
+}

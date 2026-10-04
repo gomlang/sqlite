@@ -136,7 +136,10 @@ validation may be deferred by the native driver until execution.
 
 Each call accepts one SQL statement, up to 1 MiB and 32,766 supplied parameters.
 The scanner handles comments, escaped quotes, trailing semicolons and CREATE
-TRIGGER bodies with CASE expressions. Multiple statements and direct
+TRIGGER bodies with CASE expressions. It recognizes SQLite's UTF-8 BOM
+whitespace and preserves dollar signs and Unicode characters in identifiers,
+so these cannot disguise transaction commands or trigger statement boundaries.
+Multiple statements and direct
 BEGIN/COMMIT/END/ROLLBACK/SAVEPOINT/RELEASE are rejected so SQL cannot bypass
 managed transaction state. Run a sequence of statements inside `transaction`
 when it must be atomic. This wrapper does not expose a multi-statement script API.
