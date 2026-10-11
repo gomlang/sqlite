@@ -241,7 +241,7 @@ recovers the original error for native `errors.Is`/`errors.As` consumers.
 ## Verification and compiler boundaries
 
 ```sh
-(cd ../verification && just ecosystem-test sqlite)
+(cd ../workflows && just ecosystem-test sqlite)
 ```
 
 GoML library and downstream tests cover ordinary APIs and replay 243 independent
@@ -279,10 +279,10 @@ Changing SQLite journaling policies remains subject to SQLite's own guarantees.
 
 ## Development and downstream checks
 
-Requires the source-built GoML toolchain with unversioned registry support pinned in [verification/ci/toolchain.json](https://github.com/gomlang/verification/blob/main/ci/toolchain.json). The independent native fixture is in `testdata/downstream/native/`; it retains a separate manifest and Go module for native dependencies. Root development dependencies cover its SQL and verification helpers. From the library root, run:
+Requires the source-built GoML toolchain with unversioned registry support pinned in [workflows/ci/toolchain.json](https://github.com/gomlang/workflows/blob/main/ci/toolchain.json). The independent native fixture is in `testdata/downstream/native/`; it retains a separate manifest and Go module for native dependencies. Root development dependencies cover its SQL and verification helpers. From the library root, run:
 
 ```sh
 goml test
 ```
 
-The independent downstream fixture has its own manifest and is not included in the root `goml test`. Run `(cd ../verification && just ecosystem-test sqlite)` to build and test that fixture and run the library-specific smoke and compatibility checks.
+The independent downstream fixture has its own manifest and is not included in the root `goml test`. Run `(cd ../workflows && just ecosystem-test sqlite)` to build and test that fixture and run the library-specific smoke and compatibility checks.

@@ -1,6 +1,6 @@
 package tests;
 
-use ecosystem::verification::reference;
+use ecosystem::testkit::reference;
 use downstream::sqlite as app;
 use std::fs;
 use std::json;

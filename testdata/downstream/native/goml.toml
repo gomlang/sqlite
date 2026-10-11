@@ -4,4 +4,4 @@ path = "downstream::sqlite"
 [dependencies]
 "ecosystem::sqlite" = true
 "ecosystem::sql" = true
-"ecosystem::verification" = true
+"ecosystem::testkit" = true

@@ -3,7 +3,7 @@ path = "ecosystem::sqlite"
 
 [dev-dependencies]
 "ecosystem::sql" = true
-"ecosystem::verification" = true
+"ecosystem::testkit" = true
 
 [native]
 go-module = "example.com/goml-ecosystem/sqlite"
