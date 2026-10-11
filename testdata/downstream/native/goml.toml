@@ -2,6 +2,6 @@
 path = "downstream::sqlite"
 
 [dependencies]
-"ecosystem::sqlite" = "0.1.0"
-"ecosystem::sql" = "0.1.0"
-"ecosystem::verification" = "0.1.0"
+"ecosystem::sqlite" = true
+"ecosystem::sql" = true
+"ecosystem::verification" = true

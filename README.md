@@ -16,8 +16,10 @@ Applications declare the GoML dependency:
 
 ```toml
 [dependencies]
-"ecosystem::sqlite" = "0.1.0"
+"ecosystem::sqlite" = true
 ```
+
+GoML dependencies are unversioned: `true` tracks each package repository’s default branch.
 
 The Go adapter is a separate Go dependency named
 `example.com/goml-ecosystem/sqlite`. It is local example infrastructure, not a
@@ -32,7 +34,7 @@ Fetch native modules explicitly before compiling:
 ```sh
 cd ~/git/gomlang/sqlite
 go mod download all
-../../goml-dev/stage2/bin/goml test
+goml test
 ```
 
 `go.mod` and `go.sum` pin the driver and its dependencies, including the matching
@@ -40,7 +42,7 @@ go mod download all
 resolution with network access disabled. The database driver itself does not
 require CGo; the verification race detector does require a C compiler.
 See the [driver documentation](https://pkg.go.dev/modernc.org/sqlite) and
-[GoML FFI guide](../../goml-dev/docs/goml.md#go-ffi).
+[GoML FFI guide](https://github.com/gomlang/goml/blob/main/docs/goml.md#go-ffi).
 
 ## Usage
 
@@ -106,7 +108,7 @@ may have an empty declared type. `values()` returns a new vector.
 Implement `FromRow` to map records. `Row.decode`, `Rows.next_as`,
 `query_one`, `query_optional` and `query_all` use it. The native downstream fixture
 defines both a `UserId` value mapping and a `User` record mapping, with nullable
-fields, across the versioned module boundary.
+fields, across the module boundary.
 
 The native driver sometimes returns Go `time.Time` for declared DATE/DATETIME
 columns. The adapter exposes those as RFC3339Nano TEXT; original formatting is
@@ -267,7 +269,7 @@ comparison limit while keeping concrete state in the native adapter.
 GoML 0.1.50 keeps `std::io::Error` and `std::ffi::Error` distinct. The native downstream fixture
 uses standard I/O directly in its FFI-importing package; the former transport
 wrapper has been removed. The retained
-[regression reproducer](../../goml-dev/gomlc/testdata/module/project084_ffi_error_alias) checks this boundary.
+[regression reproducer](https://github.com/gomlang/goml/tree/main/gomlc/testdata/module/project084_ffi_error_alias) checks this boundary.
 
 The library does not provide a connection pool, ORM/migrations, asynchronous
 query objects, custom SQL function registration, backup or incremental BLOB APIs.
@@ -277,11 +279,10 @@ Changing SQLite journaling policies remains subject to SQLite's own guarantees.
 
 ## Development and downstream checks
 
-Requires GoML 0.1.56 or newer. The independent native fixture is in `testdata/downstream/native/`; it retains a separate manifest and Go module for native dependencies. Root development dependencies cover its SQL and verification helpers. From the library root, run:
+Requires the source-built GoML toolchain with unversioned registry support pinned in [verification/ci/toolchain.json](https://github.com/gomlang/verification/blob/main/ci/toolchain.json). The independent native fixture is in `testdata/downstream/native/`; it retains a separate manifest and Go module for native dependencies. Root development dependencies cover its SQL and verification helpers. From the library root, run:
 
 ```sh
 goml test
-goml verify --timeout 300s
 ```
 
-`goml verify` builds and tests the fixture against an isolated registry snapshot. `(cd ../verification && just ecosystem-test sqlite)` also runs the library-specific smoke and compatibility checks.
+The independent downstream fixture has its own manifest and is not included in the root `goml test`. Run `(cd ../verification && just ecosystem-test sqlite)` to build and test that fixture and run the library-specific smoke and compatibility checks.
