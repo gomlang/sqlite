@@ -262,11 +262,10 @@ cover lock contention between physical connections, cancellation while waiting
 for the connection gate, blob copying, retained error identity and a
 native-transaction termination fault injected before commit.
 
-External handle types use small named Go interfaces rather than exposing the
-large `database/sql` implementation graph. This avoids the current FFI type-graph
-comparison limit while keeping concrete state in the native adapter.
+External handle types are opaque to GoML. Small named Go interfaces keep
+concrete `database/sql` state and resource ownership inside the native adapter.
 
-GoML 0.1.50 keeps `std::io::Error` and `std::ffi::Error` distinct. The native downstream fixture
+`std::io::Error` and `std::ffi::Error` are distinct types. The native downstream fixture
 uses standard I/O directly in its FFI-importing package; the former transport
 wrapper has been removed. The retained
 [regression reproducer](https://github.com/gomlang/goml/tree/main/gomlc/testdata/module/project084_ffi_error_alias) checks this boundary.
